@@ -5,7 +5,9 @@ const cors = require('cors')
 require('dotenv').config({ path: "./sample.env" });
 let mongoose = require('mongoose');
 const bodyParser = require('body-parser');
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(express.json()); // Used to parse JSON bodies
+app.use(express.urlencoded());
+app.use(bodyParser.urlencoded({ extended: true }));
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true }) .then(() => {
   console.log('Connected to Mongo!');
 })
@@ -23,27 +25,19 @@ app.use((req, res, next) => {
 });
 //Schema
 const userSchema = new mongoose.Schema({
-  _id: {
-    type: String,
-    required: true,
-    unique:true
-  },
+ 
   username: { type: String, required: true },
 });
  const User = mongoose.model('User', userSchema);
 
  const exerciseSchema = new mongoose.Schema({
-  _id: {
-    type: String,
-    required: true,
-    unique:true
-  },
+
   username: { type: String, required: true },
   duration: {
     type:Number,
     required:true
   },
-  date: Date,
+  date: String,
   description:{
     type:String,
     required:true
@@ -53,24 +47,25 @@ const userSchema = new mongoose.Schema({
 
 //Post
 app.post("/api/users", async (req, res) => {
-  console.log("HERE",req.body);
+  console.log("request body:",req.body);
   
-  const { name:username } = req.body;
-  
+  const { username } = req.body;
+  if (!username) {
+    return res.status(400).json({ error: "Username is required" }); // Handle missing username
+  }
   try {
-    let name = await User.findOne({ username });
-    if (name) {
-      res.json({ username, _id});
+    let user = await User.findOne({ username });
+    if (user) {
+      return res.json({ username: user.username, _id: user._id });
     } else {
-      const _id = Math.random().toString(36).substring(2, 8);
+      user = new User({
+        username});
 
-      name = new User({
-        username:name,
-        _id});
-
-      await name.save();
-      res.json({ username, _id });
-      console.log("post successful");
+      await user.save();
+     
+      res.json({ username: user.username, _id: user._id });
+      console.log("User created successfully");
+      
       }
     } catch (err) {
       console.log(err);
@@ -78,7 +73,51 @@ app.post("/api/users", async (req, res) => {
     }
   
 });
+app.use(express.json());
+app.post("/api/users/:_id/exercises", async (req, res) => {
+  console.log("request body:",req.body);
+  console.log("request.body._id:", req.body._id);
+  console.log("req.params:", req.params);
+ 
+ 
+    const { id } =  req.params;
+    console.log(req.params);
+    const userFound = await User.findById(req.params);
+    console.log(id);
+    try{
+    if (!userFound) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const { description, duration, date } = req.body;
 
+    if (!description || !duration) {
+      return res.status(400).json({ error: "Description and duration are required" });
+    }
+
+    const parsedDate = date ? new Date(date).toDateString() : new Date().toDateString();
+
+    // Save the exercise to the database
+    const exercise = new Exercise({
+      username: userFound.username,
+      description,
+      duration: Number(duration),
+      date: parsedDate,
+    });
+
+    await exercise.save();
+  
+    res.json({
+      username: userFound.username,
+      _id: id,
+      description: exercise.description,
+      duration: exercise.duration,
+      date: exercise.date,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json("Server Error");
+  }
+});
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
 })
