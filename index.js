@@ -20,8 +20,12 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`, req.body);
+  console.log("Incoming request:", req.method, req.url, req.query);
   next();
+});
+app.use((err, req, res, next) => {
+  console.error("Middleware error:", err);
+  res.status(500).json({ error: "Middleware error" });
 });
 //Schema
 const userSchema = new mongoose.Schema({
@@ -124,16 +128,66 @@ app.get("/api/users", async function(req, res) {
   const  users= await User.find();
   res.json(users);
 });
-app.get("/api/users/:_id/logs/", async function(req,res){
-  const  user = await User.findById(req.params);
-  const logs = await Exercise.find({username: user.username},["description","duration","date"]);
- //logs.generateArray();
- let count = logs.length;
-  res.json( {
-   _id: user._id,
-   username: user.username,
-   count:count,
-   log: logs});
+
+app.get("/api/users/:_id/logs", async function (req, res) {
+  console.log("req.query:", req.query);
+  console.log("whatever");
+  try {
+    const { _id } = req.params; 
+    const { from, to, limit } = req.query; // Extract query parameters
+
+    // Find the user by ID
+    const user = await User.findById(_id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    
+    let query = { username: user.username };
+
+    // Filter by date range if provided
+    if (from || to) {
+      query.date = {};
+      if (from) query.date.$gte = new Date(from);
+      if (to) query.date.$lte = new Date(to);
+    }
+
+    // Fetch 
+    let logs = await Exercise.find(query, "description duration date")
+      .sort("date") // Sort logs by date in ascending order
+      .limit(limit ? parseInt(limit) : 0) // Apply limit if provided
+      .exec();
+
+    //Format
+    logs = logs.map(log => ({
+      description: log.description,
+      duration: log.duration,
+      date: new Date(log.date).toDateString(),
+    }));
+
+    
+    let response = {
+      _id: user._id,
+      username: user.username,
+      count: logs.length,
+      log: logs,
+    };
+ // Include `from` and `to` in res
+ if ((req.query.from)) {
+let  from1 = new Date(req.query.from).toDateString();
+  response = { ...response, from: from1};
+  console.log("Added 'from' to response:", response.from);
+}
+if (req.query.to) {
+  let to2 = new Date(req.query.to).toDateString();
+  response = { ...response, to: to2};
+  console.log("Added 'to' to response:", response.to);
+}
+ res.json(response);
+} catch (error) {
+ console.error(error);
+ res.status(500).json({ error: "Server error" });
+}
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
