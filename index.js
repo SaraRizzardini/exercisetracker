@@ -108,7 +108,7 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
   
     res.json({
       username: userFound.username,
-      _id: id,
+      _id: userFound._id,
       description: exercise.description,
       duration: exercise.duration,
       date: exercise.date,
@@ -118,6 +118,24 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
     res.status(500).json("Server Error");
   }
 });
+
+//Get
+app.get("/api/users", async function(req, res) {
+  const  users= await User.find();
+  res.json(users);
+});
+app.get("/api/users/:_id/logs/", async function(req,res){
+  const  user = await User.findById(req.params);
+  const logs = await Exercise.find({username: user.username},["description","duration","date"]);
+ //logs.generateArray();
+ let count = logs.length;
+  res.json( {
+   _id: user._id,
+   username: user.username,
+   count:count,
+   log: logs});
+});
+
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
 })
