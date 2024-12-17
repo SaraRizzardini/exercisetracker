@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
     type:Number,
     required:true
   },
-  date: String,
+  date: Date,
   description:{
     type:String,
     required:true
@@ -98,7 +98,7 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
       return res.status(400).json({ error: "Description and duration are required" });
     }
 
-    const parsedDate = date ? new Date(date).toDateString() : new Date().toDateString();
+    const parsedDate = date ? new Date(date) : new Date();
 
     // Save the exercise to the database
     const exercise = new Exercise({
@@ -115,7 +115,7 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
       _id: userFound._id,
       description: exercise.description,
       duration: exercise.duration,
-      date: exercise.date,
+      date: exercise.date.toDateString(),
     });
   } catch (err) {
     console.error(err);
@@ -129,12 +129,15 @@ app.get("/api/users", async function(req, res) {
   res.json(users);
 });
 
+
+
 app.get("/api/users/:_id/logs", async function (req, res) {
-  console.log("req.query:", req.query);
-  console.log("whatever");
   try {
-    const { _id } = req.params; 
-    const { from, to, limit } = req.query; // Extract query parameters
+    const { _id } = req.params;
+    const { from, to, limit } = req.query;
+
+    // Debugging to check incoming query parameters
+    console.log("Query params:", req.query);
 
     // Find the user by ID
     const user = await User.findById(_id);
@@ -142,52 +145,52 @@ app.get("/api/users/:_id/logs", async function (req, res) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    
+    // Prepare the query for the logs
     let query = { username: user.username };
 
-    // Filter by date range if provided
     if (from || to) {
       query.date = {};
       if (from) query.date.$gte = new Date(from);
       if (to) query.date.$lte = new Date(to);
     }
-
-    // Fetch 
+    console.log(query)
+    // Fetch and optionally limit the logs
     let logs = await Exercise.find(query, "description duration date")
-      .sort("date") // Sort logs by date in ascending order
-      .limit(limit ? parseInt(limit) : 0) // Apply limit if provided
+      .sort("date")
+      .limit(limit ? parseInt(limit) : 0)
       .exec();
 
-    //Format
-    logs = logs.map(log => ({
+    // Format the logs for response
+    logs = logs.map((log) => ({
       description: log.description,
       duration: log.duration,
       date: new Date(log.date).toDateString(),
     }));
 
-    
+    // Build the response object
     let response = {
       _id: user._id,
       username: user.username,
       count: logs.length,
       log: logs,
     };
- // Include `from` and `to` in res
- if ((req.query.from)) {
-let  from1 = new Date(req.query.from).toDateString();
-  response = { ...response, from: from1};
-  console.log("Added 'from' to response:", response.from);
-}
-if (req.query.to) {
-  let to2 = new Date(req.query.to).toDateString();
-  response = { ...response, to: to2};
-  console.log("Added 'to' to response:", response.to);
-}
- res.json(response);
-} catch (error) {
- console.error(error);
- res.status(500).json({ error: "Server error" });
-}
+
+    // Include `from` and `to` only if provided
+    if (from) {
+      response.from = new Date(from).toDateString();
+    }
+    if (to) {
+      response.to = new Date(to).toDateString();
+    }
+
+    // Debugging the final response before sending
+    console.log("Final response:", response);
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error handling /api/users/:_id/logs:", error);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
